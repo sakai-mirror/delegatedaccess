@@ -198,9 +198,4 @@
     <module>pack</module>
   </modules>
 
-  <scm>
-    <connection>scm:svn:https://source.sakaiproject.org/svn/master/tags/delegatedaccess-1.0.0</connection>
-    <developerConnection>scm:svn:https://source.sakaiproject.org/svn/master/tags/delegatedaccess-1.0.0</developerConnection>
-    <url>https://source.sakaiproject.org/svn/master/tags/delegatedaccess-1.0.0</url>
-  </scm>
 </project>
