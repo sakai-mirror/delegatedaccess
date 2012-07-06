@@ -1510,7 +1510,7 @@ public class ProjectLogicImpl implements ProjectLogic {
 		return accessAdminNodes != null && accessAdminNodes.size() > 0;
 	}
 	
-	public Map<String, String> getNodesBySiteRef(String[] siteRefs, String hierarchyId){
+	public Map<String, List<String>> getNodesBySiteRef(String[] siteRefs, String hierarchyId){
 		return dao.getNodesBySiteRef(siteRefs, hierarchyId);
 	}
 	
@@ -1588,17 +1588,21 @@ public class ProjectLogicImpl implements ProjectLogic {
 		}
 		if(dAMapFlag != null || shoppingPeriod){
 			//get list of all site ref nodes:
-			Map<String, String> siteRefToNodeMap = getNodesBySiteRef(siteRefs.toArray(new String[siteRefs.size()]), hierarchyId);
+			Map<String, List<String>> siteRefToNodeMap = getNodesBySiteRef(siteRefs.toArray(new String[siteRefs.size()]), hierarchyId);
 			if(siteRefToNodeMap != null){
-				Map<String, HierarchyNode> siteNodes = hierarchyService.getNodesByIds(siteRefToNodeMap.values().toArray(new String[siteRefToNodeMap.values().size()]));
+				Set<String> nodeIds = new HashSet<String>();
+				for(List<String> nodeIdsList : siteRefToNodeMap.values()){
+					nodeIds.addAll(nodeIdsList);
+				}
+				Map<String, HierarchyNode> siteNodes = hierarchyService.getNodesByIds(nodeIds.toArray(new String[nodeIds.size()]));
 				//find the node for the site
 				Map<String, Map<String, Set<String>>> usersNodesAndPerms = hierarchyService.getNodesAndPermsForUser(userId);
 				Map<String, Set<String>> userNodesAndPerms = usersNodesAndPerms.get(userId);
 				if(userNodesAndPerms != null){
 					for(String siteRef : siteRefs){
-						if(siteRefToNodeMap != null && siteRefToNodeMap.containsKey(siteRef)){
+						if(siteRefToNodeMap != null && siteRefToNodeMap.containsKey(siteRef) && siteRefToNodeMap.get(siteRef) != null && siteRefToNodeMap.get(siteRef).size() > 0){
 							//find the first access node for this user, if none found, then that means they don't have access
-							String nodeId = siteRefToNodeMap.get(siteRef);
+							String nodeId = siteRefToNodeMap.get(siteRef).get(0);
 							while(nodeId != null && !"".equals(nodeId)){
 								Set<String> perms = userNodesAndPerms.get(nodeId);
 								if(perms != null && getIsDirectAccess(perms)){
