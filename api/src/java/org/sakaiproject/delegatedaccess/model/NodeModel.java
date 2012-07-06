@@ -67,7 +67,6 @@ public class NodeModel implements Serializable {
 		shoppingPeriodStartDateOrig = shoppingPeriodStartDate;
 		shoppingPeriodEndDateOrig = shoppingPeriodEndDate;
 		shoppingPeriodAuthOrig = getShoppingPeriodAuth();
-		shoppingPeriodRevokeInstructorEditableOrig = shoppingPeriodRevokeInstructorEditable;
 	}
 	
 	public NodeModel(String nodeId, HierarchyNodeSerialized node,
