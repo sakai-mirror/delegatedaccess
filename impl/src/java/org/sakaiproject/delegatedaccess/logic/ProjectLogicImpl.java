@@ -351,8 +351,8 @@ public class ProjectLogicImpl implements ProjectLogic {
 	/**
 	 * {@inheritDoc}
 	 */
-	public List<SearchResult> searchUsers(String search, int first, int last) {
-		List<User> searchResult = sakaiProxy.searchUsers(search, first, last);
+	public List<SearchResult> searchUsers(String search) {
+		List<User> searchResult = sakaiProxy.searchUsers(search);
 		List<SearchResult> returnList = new ArrayList<SearchResult>();
 		for(User user : searchResult){
 			returnList.add(getSearchResult(user));
@@ -510,8 +510,13 @@ public class ProjectLogicImpl implements ProjectLogic {
 		Map<String, String> userSortNameCache = new HashMap<String, String>();
 		if(!"".equals(search) || (advancedOptions != null && advancedOptions.size() > 0)){
 			siteSubset = searchSites(search, advancedOptions);
+			List<String> siteRefs = new ArrayList<String>();
 			for(SiteSearchResult siteResult : siteSubset){
-				AccessNode access = grantAccessToSite(siteResult.getSiteReference(), shoppingPeriod, activeShoppingData);
+				siteRefs.add(siteResult.getSiteReference());
+			}
+			Map<String,AccessNode> accessList = grantAccessToSites(siteRefs, shoppingPeriod, activeShoppingData);
+			for(SiteSearchResult siteResult : siteSubset){
+				AccessNode access = accessList.get(siteResult.getSiteReference());
 				if(access != null){
 					siteResult.setAccess(access.getAccess());
 					siteResult.setShoppingPeriodAuth(access.getAuth());
@@ -542,13 +547,9 @@ public class ProjectLogicImpl implements ProjectLogic {
 			search = null;
 		}
 		Map<String, SiteSearchResult> sites = new HashMap<String, SiteSearchResult>();
-		String termField = sakaiProxy.getTermField();
-		//first, check if the search is a site id:
 		Site searchByIdSite = sakaiProxy.getSiteById(search);
-		if(searchByIdSite != null){
-			sites.put(searchByIdSite.getId(), new SiteSearchResult(searchByIdSite, new ArrayList<User>(), termField));
-		}
-		
+		String termField = sakaiProxy.getTermField();
+				
 		//get hierarchy structure:
 		String[] hierarchy = sakaiProxy.getServerConfigurationStrings(DelegatedAccessConstants.HIERARCHY_SITE_PROPERTIES);
 		if(hierarchy == null || hierarchy.length == 0){
@@ -561,69 +562,64 @@ public class ProjectLogicImpl implements ProjectLogic {
 			propsMap.put(prop, "");
 		}
 		
-		if (advancedOptions != null
-				&& (advancedOptions
-						.containsKey(DelegatedAccessConstants.ADVANCED_SEARCH_INSTRUCTOR) || advancedOptions
-						.containsKey(DelegatedAccessConstants.ADVANCED_SEARCH_TERM))) {
-			//Advanced Search
-			
-			if (advancedOptions
-					.containsKey(DelegatedAccessConstants.ADVANCED_SEARCH_TERM)) {
-				propsMap.put(sakaiProxy.getTermField(), advancedOptions
-						.get(DelegatedAccessConstants.ADVANCED_SEARCH_TERM));
-			}
-			// find all user's with this name/id/email
-			if (advancedOptions
-					.containsKey(DelegatedAccessConstants.ADVANCED_SEARCH_INSTRUCTOR)) {
-				List<User> searchUsers = sakaiProxy
-						.searchUsers(
-								advancedOptions
-										.get(DelegatedAccessConstants.ADVANCED_SEARCH_INSTRUCTOR),
-								1, DelegatedAccessConstants.SEARCH_RESULTS_MAX);
-				for (User user : searchUsers) {
-					for (Site site : getUserUpdatePermissionMembership(
-							user.getId(), search, propsMap)) {
-						if(sites.containsKey(site.getId())){
-							sites.get(site.getId()).addInstructor(user);
-						}else{
-							List<User> usersList = new ArrayList<User>();
-							usersList.add(user);
-							sites.put(site.getId(), new SiteSearchResult(site, usersList, termField));
-						}
+		//add term field restriction if it exist:
+		if (advancedOptions != null && advancedOptions.containsKey(DelegatedAccessConstants.ADVANCED_SEARCH_TERM)
+				&& advancedOptions.get(DelegatedAccessConstants.ADVANCED_SEARCH_TERM) != null
+				&& !"".equals(advancedOptions.get(DelegatedAccessConstants.ADVANCED_SEARCH_TERM).trim())) {
+			//add term field to propMap for search
+			propsMap.put(termField, advancedOptions.get(DelegatedAccessConstants.ADVANCED_SEARCH_TERM));
+			//check if we need to remove the searchByIdSite b/c of the term
+			if(searchByIdSite != null && searchByIdSite.getProperties() != null
+					&& searchByIdSite.getProperties().getProperty(termField) != null
+					&& searchByIdSite.getProperties().getProperty(termField).toLowerCase().contains(advancedOptions.get(DelegatedAccessConstants.ADVANCED_SEARCH_TERM))){
+				//do nothing, we found it
+			}else{
+				//doesn't exist in this term, remove it
+				searchByIdSite = null;
+			}	
+		}
+		
+		//add instructor restriction
+		if (advancedOptions != null && advancedOptions.containsKey(DelegatedAccessConstants.ADVANCED_SEARCH_INSTRUCTOR)
+				&& advancedOptions.get(DelegatedAccessConstants.ADVANCED_SEARCH_INSTRUCTOR) != null
+				&& !"".equals(advancedOptions.get(DelegatedAccessConstants.ADVANCED_SEARCH_INSTRUCTOR).trim())) {
+			List<User> searchUsers = sakaiProxy.searchUsers(advancedOptions.get(DelegatedAccessConstants.ADVANCED_SEARCH_INSTRUCTOR));
+			//since we added a site by searching for ID, we need to make sure that at least 1 user is a member,
+			//otherwise, remove it from the results:
+			boolean foundSearchByIdMember = searchByIdSite == null ? true : false;
+			for (User user : searchUsers) {
+				if(!foundSearchByIdMember && searchByIdSite.getMember(user.getId()) != null){
+					foundSearchByIdMember = true;
+				}
+				//the search will use the propsMap (term if enabled) as well as search string, so no need to do additional searching after this
+				for (Site site : getUserUpdatePermissionMembership(
+						user.getId(), search, propsMap)) {
+					if(sites.containsKey(site.getId())){
+						sites.get(site.getId()).addInstructor(user);
+					}else{
+						List<User> usersList = new ArrayList<User>();
+						usersList.add(user);
+						sites.put(site.getId(), new SiteSearchResult(site, usersList, termField));
 					}
 				}
-
 			}
-			if (advancedOptions
-					.containsKey(DelegatedAccessConstants.ADVANCED_SEARCH_TERM)) {
-				if (sites.isEmpty()) {
-					// grab all sites in term since there are no other
-					// restrictions
-					for (Site site : sakaiProxy.getSites(SelectionType.NON_USER,
-							search, propsMap)) {
-						sites.put(site.getId(), new SiteSearchResult(site, new ArrayList<User>(), termField));
-					}
-				} else {
-					for (Iterator iterator = sites.entrySet().iterator(); iterator
-							.hasNext();) {
-						Entry<String, SiteSearchResult> entry = (Entry<String, SiteSearchResult>) iterator
-								.next();
-						if (entry.getValue().getSiteTerm() == null
-								|| !entry.getValue().getSiteTerm().toLowerCase().contains(
-												advancedOptions.get(DelegatedAccessConstants.ADVANCED_SEARCH_TERM).toLowerCase())){
-							sites.remove(entry.getKey());
-						}
-					}
-				}
-
+			if(!foundSearchByIdMember && searchByIdSite != null){
+				//we didn't find any members for this site in the user search, so remove it:
+				searchByIdSite = null;
 			}
-		} else {
+		}else{
 			// search title or id
 			for (Site site : sakaiProxy.getSites(SelectionType.NON_USER, search,
 					propsMap)) {
 				sites.put(site.getId(), new SiteSearchResult(site, new ArrayList<User>(), termField));
 			}
 		}
+		
+		if(searchByIdSite != null && !sites.containsKey(searchByIdSite.getId())){
+			sites.put(searchByIdSite.getId(), new SiteSearchResult(searchByIdSite, new ArrayList<User>(), termField));
+		}
+		
+		
 		return sites.values();
 	}
 	
@@ -667,29 +663,26 @@ public class ProjectLogicImpl implements ProjectLogic {
 	 */
 	public TreeModel createEntireTreeModelForUser(String userId, boolean addDirectChildren, boolean cascade)
 	{
-		//these are the nodes that the user is allowed to assign
-		Set<HierarchyNodeSerialized> accessAdminNodes = null;
+		//this is a list of sub-admin access nodes.  if the user is a super-admin, then this will be null (as a flag that this is a super admin)
 		List<String> accessAdminNodeIds = null;
 		//check if the user is a super admin, if not, then get the accessAdmin nodes connected to the current user
 		if(!sakaiProxy.isSuperUser()){
 			//only allow the current user to modify permissions for this user on the nodes that
 			//has been assigned accessAdmin for currentUser
-			accessAdminNodes = getAccessAdminNodesForUser(sakaiProxy.getCurrentUserId());
+			Set<HierarchyNodeSerialized>  currentUserAdminNodes = getAccessAdminNodesForUser(sakaiProxy.getCurrentUserId());
 			accessAdminNodeIds = new ArrayList<String>();
-			if(accessAdminNodes != null){
-				for(HierarchyNodeSerialized node : accessAdminNodes){
+			if(currentUserAdminNodes != null){
+				for(HierarchyNodeSerialized node : currentUserAdminNodes){
 					accessAdminNodeIds.add(node.id);
 				}
 			}
-			//now call this function to set the nodeArrays:
-			getAllNodesForUser(userId);
-		}else{
-			accessAdminNodes = getAllNodesForUser(userId);
 		}
+		//these are the nodes that the edit user has permissions in
+		Set<HierarchyNodeSerialized> userNodes = userNodes = getAllNodesForUser(userId);
 		
 		//Returns a List that represents the tree/node architecture:
 		//  List{ List{node, List<children>}, List{node, List<children>}, ...}.
-		List<List> l1 = getTreeListForUser(userId, addDirectChildren, cascade, accessAdminNodes);
+		List<List> l1 = getTreeListForUser(userId, addDirectChildren, cascade, userNodes);
 		//Remove the shopping period nodes:
 		if(l1 != null){
 			HierarchyNode shoppingRoot = hierarchyService.getRootNode(DelegatedAccessConstants.SHOPPING_PERIOD_HIERARCHY_ID);
@@ -1064,12 +1057,36 @@ public class ProjectLogicImpl implements ProjectLogic {
 		}
 	}
 
+	/**
+	 * returns the order of the parent id's from highest to lowest in the hierarchy
+	 * @return
+	 */
+	private List<String> getOrderedParentsList(HierarchyNodeSerialized node){
+		String directParentId = null;
+		if(node.directParentNodeIds != null && node.directParentNodeIds.size() > 0){
+			directParentId = node.directParentNodeIds.toArray(new String[node.directParentNodeIds.size()])[0];
+			return getOrderedParentsListHelper(getCachedNode(directParentId));
+		}else{
+			return new ArrayList<String>();
+		}
+	}
+	private List<String> getOrderedParentsListHelper(HierarchyNodeSerialized node){
+		if(node.directParentNodeIds == null || node.directParentNodeIds.size() == 0){
+			List<String> returnList = new ArrayList<String>();
+			returnList.add(node.id);
+			return returnList;
+		}else{
+			List<String> parents = getOrderedParentsListHelper(getCachedNode(node.directParentNodeIds.toArray(new String[node.directParentNodeIds.size()])[0]));
+			parents.add(node.id);
+			return parents;
+		}
+	}
 	private List<List> getTreeListForUser(String userId, boolean addDirectChildren, boolean cascade, Set<HierarchyNodeSerialized> nodes){
 		List<List> l1 = new ArrayList<List>();
 		List<List> currentLevel = l1;
 
 		for(HierarchyNodeSerialized node : nodes){
-			for(String parentId : node.parentNodeIds){
+			for(String parentId : getOrderedParentsList(node)){
 				HierarchyNodeSerialized parentNode = getCachedNode(parentId);
 
 				if(!hasNode(parentNode, currentLevel)){
@@ -1087,6 +1104,7 @@ public class ProjectLogicImpl implements ProjectLogic {
 					}
 				}
 			}
+
 			if(!hasNode(node, currentLevel)){
 				List child = new ArrayList();
 				child.add(node);
@@ -1344,9 +1362,9 @@ public class ProjectLogicImpl implements ProjectLogic {
 	public NodeModel getNodeModel(String nodeId, String userId){
 		HierarchyNodeSerialized node = getNode(nodeId);
 		NodeModel parentNodeModel = null;
-		if(node.parentNodeIds != null && node.parentNodeIds.size() > 0){
+		if(node.directParentNodeIds != null && node.directParentNodeIds.size() > 0){
 			//grad the last parent in the Set (this is the closest parent)
-			parentNodeModel = getNodeModel((String) node.parentNodeIds.toArray()[node.parentNodeIds.size() -1], userId);
+			parentNodeModel = getNodeModel((String) node.directParentNodeIds.toArray()[node.directParentNodeIds.size() -1], userId);
 		}
 		Set<String> nodePerms = hierarchyService.getPermsForUserNodes(userId, new String[]{nodeId});
 		Set<String> perms = getPermsForUserNodes(userId, node.id);
@@ -1489,8 +1507,8 @@ public class ProjectLogicImpl implements ProjectLogic {
 		return accessAdminNodes != null && accessAdminNodes.size() > 0;
 	}
 	
-	public List<String> getNodesBySiteRef(String siteRef, String hierarchyId){
-		return dao.getNodesBySiteRef(siteRef, hierarchyId);
+	public Map<String, List<String>> getNodesBySiteRef(String[] siteRefs, String hierarchyId){
+		return dao.getNodesBySiteRef(siteRefs, hierarchyId);
 	}
 	
 	public void clearNodeCache(){
@@ -1503,17 +1521,19 @@ public class ProjectLogicImpl implements ProjectLogic {
 				&& ((Map) sakaiProxy.getCurrentSession().getAttribute(DelegatedAccessConstants.SESSION_ATTRIBUTE_ACCESS_MAP)).containsKey(siteRef)){
 			return (String[]) ((Map) sakaiProxy.getCurrentSession().getAttribute(DelegatedAccessConstants.SESSION_ATTRIBUTE_ACCESS_MAP)).get(siteRef);
 		}else{
-			AccessNode access = grantAccessToSite(siteRef, false, false);
-			if(access != null){
-				return access.getAccess();
+			List<String> siteRefs = new ArrayList<String>();
+			siteRefs.add(siteRef);
+			Map<String, AccessNode> accessNodes = grantAccessToSites(siteRefs, false, false);
+			if(accessNodes != null && accessNodes.containsKey(siteRef)){
+				return accessNodes.get(siteRef).getAccess();
 			}else{
 				return null;
 			}
 		}
 	}
 	
-	private AccessNode grantAccessToSite(String siteRef, boolean shoppingPeriod, boolean activeShoppingData){
-		AccessNode returnNode = null;
+	private Map<String, AccessNode> grantAccessToSites(List<String> siteRefs, boolean shoppingPeriod, boolean activeShoppingData){
+		Map<String, AccessNode> returnNodes = new HashMap<String, AccessNode>();
 		Session session = sakaiProxy.getCurrentSession();
 		Map<String, String[]> deniedToolsMap = new HashMap<String, String[]>();
 		if(!shoppingPeriod){
@@ -1532,20 +1552,28 @@ public class ProjectLogicImpl implements ProjectLogic {
 				accessMap = (Map<String, String[]>) sessionaccessMap;
 			}
 		}
-		
-		if(!shoppingPeriod && accessMap.containsKey(siteRef) && accessMap.get(siteRef) == null){
-			//we already know this result is null, so return null
-			return null;
-		}
-		
-		//set default to no access and override it if the user does have access
-		//this is so we don't have to keep looking up their access for the same site:
-		deniedToolsMap.put(siteRef, null);
-		accessMap.put(siteRef, null);
 
+		for (Iterator iterator = siteRefs.iterator(); iterator.hasNext();) {
+			String siteRef = (String) iterator.next();
+			if(!shoppingPeriod && accessMap.containsKey(siteRef) && accessMap.get(siteRef) == null){
+				//we already know this result is null, so return null
+				returnNodes.put(siteRef, null);
+				iterator.remove();
+			}else{
+				//set default to no access and override it if the user does have access
+				//this is so we don't have to keep looking up their access for the same site:
+				deniedToolsMap.put(siteRef, null);
+				accessMap.put(siteRef, null);
+			}
+		}
+		//Set user Id and hierarchy id
 		String userId = sakaiProxy.getCurrentUserId();
+		String hierarchyId = DelegatedAccessConstants.HIERARCHY_ID;
 		if(shoppingPeriod){
 			userId = DelegatedAccessConstants.SHOPPING_PERIOD_USER;
+			if(activeShoppingData){
+				hierarchyId = DelegatedAccessConstants.SHOPPING_PERIOD_HIERARCHY_ID;
+			}
 		}
 
 		//this is a simple flag set in the delegated access login observer which
@@ -1555,69 +1583,92 @@ public class ProjectLogicImpl implements ProjectLogic {
 		if(!shoppingPeriod){
 			dAMapFlag = session.getAttribute(DelegatedAccessConstants.SESSION_ATTRIBUTE_DELEGATED_ACCESS_FLAG);
 		}
-		boolean isUserMember = sakaiProxy.isUserMember(userId, siteRef);
-		if((dAMapFlag != null && !isUserMember) || shoppingPeriod){
-			//find the node for the site
-			List<String> siteNodes = getNodesBySiteRef(siteRef, DelegatedAccessConstants.HIERARCHY_ID);
-			if(siteNodes != null && siteNodes.size() == 1){
-				//find the first access node for this user, if none found, then that means they don't have access
-				String nodeId = siteNodes.get(0);
-				while(nodeId != null && !"".equals(nodeId)){
-					//get user's permissions for this site/node
-					Set<String> perms = hierarchyService.getPermsForUserNodes(userId, new String[]{nodeId});
-					//is this node direct access (checked), if so, grab the settings, otherwise, look at the parent
-					if(getIsDirectAccess(perms)){
-						if(shoppingPeriod && activeShoppingData){
-							//do substring(6) b/c we need site ID and what is stored is a ref: /site/1231231
-							String siteId = siteRef.substring(6);
-							if(!isShoppingAvailable(perms, siteId)){
-								//check that shopping period is still available unless activeShoppingData is false
-								break;
-							}
-						}
-						//Access Map:
-						String[] access = getAccessRealmRole(perms);
-						if (access == null || access.length != 2
-								|| access[0] == null
-								|| access[1] == null
-								|| "".equals(access[0])
-								|| "".equals(access[1])
-								|| "null".equals(access[0])
-								|| "null".equals(access[1])) {
-							access = new String[]{"", ""};
-						}
+		if(dAMapFlag != null || shoppingPeriod){
+			//get list of all site ref nodes:
+			Map<String, List<String>> siteRefToNodeMap = getNodesBySiteRef(siteRefs.toArray(new String[siteRefs.size()]), hierarchyId);
+			if(siteRefToNodeMap != null){
+				Set<String> nodeIds = new HashSet<String>();
+				for(List<String> nodeIdsList : siteRefToNodeMap.values()){
+					nodeIds.addAll(nodeIdsList);
+				}
+				Map<String, HierarchyNode> siteNodes = hierarchyService.getNodesByIds(nodeIds.toArray(new String[nodeIds.size()]));
+				//find the node for the site
+				Map<String, Map<String, Set<String>>> usersNodesAndPerms = hierarchyService.getNodesAndPermsForUser(userId);
+				Map<String, Set<String>> userNodesAndPerms = usersNodesAndPerms.get(userId);
+				if(userNodesAndPerms != null){
+					for(String siteRef : siteRefs){
+						if(siteRefToNodeMap != null && siteRefToNodeMap.containsKey(siteRef) && siteRefToNodeMap.get(siteRef) != null && siteRefToNodeMap.get(siteRef).size() > 0){
+							//find the first access node for this user, if none found, then that means they don't have access
+							String nodeId = siteRefToNodeMap.get(siteRef).get(0);
+							while(nodeId != null && !"".equals(nodeId)){
+								Set<String> perms = userNodesAndPerms.get(nodeId);
+								if(perms != null && getIsDirectAccess(perms)){
+									//check first that the user's isn't a member of the site, if so, return null:
+									//don't waste time checking until we get to this level (for bulk searching speed)
+									if(!shoppingPeriod && sakaiProxy.isUserMember(userId, siteRef)){
+										returnNodes.put(siteRef, null);
+									}else{
+										if(shoppingPeriod && activeShoppingData){
+											//do substring(6) b/c we need site ID and what is stored is a ref: /site/1231231
+											String siteId = siteRef.substring(6);
+											if(!isShoppingAvailable(perms, siteId)){
+												//check that shopping period is still available unless activeShoppingData is false
+												break;
+											}
+										}
+										//Access Map:
+										String[] access = getAccessRealmRole(perms);
+										if (access == null || access.length != 2
+												|| access[0] == null
+												|| access[1] == null
+												|| "".equals(access[0])
+												|| "".equals(access[1])
+												|| "null".equals(access[0])
+												|| "null".equals(access[1])) {
+											access = new String[]{"", ""};
+										}
 
-						accessMap.put(siteRef, access);
-						
-						//Denied Tools List
-						List<String> deniedTools = getRestrictedToolsForUser(perms);
-						String[] deniedToolsArr = (String[]) deniedTools.toArray(new String[deniedTools.size()]);
-						if(deniedToolsArr != null){
-							deniedToolsMap.put(siteRef, deniedToolsArr);
-						}else{
-							deniedToolsMap.put(siteRef, new String[0]);
-						}
-						
+										accessMap.put(siteRef, access);
 
-						String shoppingAuth = getShoppingPeriodAuth(perms);
-						
-						Date startDate = getShoppingStartDate(perms);
-						Date endDate = getShoppingEndDate(perms);
-						Date modified = getPermDate(perms, DelegatedAccessConstants.NODE_PERM_MODIFIED);
-						String modifiedBy = getModifiedBy(perms);
-						
-						//set returnNode
-						returnNode = new AccessNode(siteRef, access, deniedToolsArr, shoppingAuth, startDate, endDate, modified, modifiedBy);
+										//Denied Tools List
+										List<String> deniedTools = getRestrictedToolsForUser(perms);
+										String[] deniedToolsArr = (String[]) deniedTools.toArray(new String[deniedTools.size()]);
+										if(deniedToolsArr != null){
+											deniedToolsMap.put(siteRef, deniedToolsArr);
+										}else{
+											deniedToolsMap.put(siteRef, new String[0]);
+										}
 
-						//break out of loop
-						nodeId = null;
-						break;
-					}else{
-						Set<String> parentIds = hierarchyService.getNodeById(nodeId).directParentNodeIds;
-						nodeId = null;
-						if(parentIds != null && parentIds.size() == 1){
-							for(String id : parentIds){
-								nodeId = id;
+
+										String shoppingAuth = getShoppingPeriodAuth(perms);
+
+										Date startDate = getShoppingStartDate(perms);
+										Date endDate = getShoppingEndDate(perms);
+										Date modified = getPermDate(perms, DelegatedAccessConstants.NODE_PERM_MODIFIED);
+										String modifiedBy = getModifiedBy(perms);
+
+										//set returnNode
+										AccessNode returnNode = new AccessNode(siteRef, access, deniedToolsArr, shoppingAuth, startDate, endDate, modified, modifiedBy);
+										returnNodes.put(siteRef, returnNode);
+									}
+									//break out of loop
+									nodeId = null;
+									break;
+								}else{
+									Set<String> parentIds = null;
+									if(siteNodes != null && siteNodes.containsKey(nodeId)){
+										//we've already spent the time looking this up in bulk
+										parentIds = siteNodes.get(nodeId).directParentNodeIds;
+									}else{
+										parentIds = getCachedNode(nodeId).directParentNodeIds;
+									}
+									nodeId = null;
+									if(parentIds != null && parentIds.size() == 1){
+										for(String id : parentIds){
+											nodeId = id;
+										}
+									}
+								}
 							}
 						}
 					}
@@ -1632,11 +1683,11 @@ public class ProjectLogicImpl implements ProjectLogic {
 			try{
 				restrictedToolsCache.put(new Element(userId, deniedToolsMap));
 			}catch (Exception e) {
-				log.error("grantAccessToSite: " + siteRef + ", " + userId, e);
+				log.error("grantAccessToSite: " + userId, e);
 			}
 		}
-		
-		return returnNode;
+
+		return returnNodes;
 	}
 	
 	private boolean isShoppingAvailable(Set<String> perms, String siteId){

@@ -309,14 +309,6 @@ public class UserPageSiteSearch extends BasePage {
 					private static final long serialVersionUID = 1L;
 					public void onClick(AjaxRequestTarget target) {
 						if(siteSearchResult.getSiteUrl() != null){
-							//first check that the user's has been initialized:
-							if(sakaiProxy.getCurrentSession().getAttribute(DelegatedAccessConstants.SESSION_ATTRIBUTE_DELEGATED_ACCESS_FLAG) == null){
-								//how did we get here?  (here = access to DA's site list, but the DA flag isn't set)
-								//two ideas:  1: Admin "Become User", which bypassess the Observer event login
-								//2: something screwed up on login (or logged in another way) and bypasses the Observer event login
-								//oh well, we want this to work, so let's retry:
-								projectLogic.initializeDelegatedAccessSession();
-							}
 							//redirect the user to the site
 							target.appendJavascript("window.open('" + siteSearchResult.getSiteUrl() + "')");
 						}
@@ -490,20 +482,20 @@ public class UserPageSiteSearch extends BasePage {
 					search = "";
 				}
 				if(!"".equals(search) || (advancedOptions != null && !advancedOptions.isEmpty())){
-					list = projectLogic.searchUserSites(getSearch(), advancedOptions.isEmpty() ? null : advancedOptions, (isShoppingPeriodTool() || statistics), isShoppingPeriodTool() || (statistics && currentStatisticsFlag));
-					if(currentStatisticsFlag){
-						//need to filter out the results and find only current shopping period results:
-						for (Iterator iterator = list.iterator(); iterator
-								.hasNext();) {
-							SiteSearchResult result = (SiteSearchResult) iterator.next();
-							List<String> nodes = projectLogic.getNodesBySiteRef(result.getSiteReference(), DelegatedAccessConstants.SHOPPING_PERIOD_HIERARCHY_ID);
-							if(nodes == null || nodes.size() == 0){
-								//this site doesn't exist in the current shopping period hierarchy, so remove it
-								iterator.remove();
-							}
-						}
-						
-					}
+					 list = projectLogic.searchUserSites(getSearch(), advancedOptions.isEmpty() ? null : advancedOptions, (isShoppingPeriodTool() || statistics), isShoppingPeriodTool() || (statistics && currentStatisticsFlag));
+//					if(currentStatisticsFlag){
+//						//need to filter out the results and find only current shopping period results:
+//						for (Iterator iterator = list.iterator(); iterator
+//								.hasNext();) {
+//							SiteSearchResult result = (SiteSearchResult) iterator.next();
+//							Map<String, String> nodes = projectLogic.getNodesBySiteRef(new String[]{result.getSiteReference()}, DelegatedAccessConstants.SHOPPING_PERIOD_HIERARCHY_ID);
+//							if(nodes == null || !nodes.containsKey(result.getSiteReference())){
+//								//this site doesn't exist in the current shopping period hierarchy, so remove it
+//								iterator.remove();
+//							}
+//						}
+//						
+//					}
 				}else {
 					list = new ArrayList<SiteSearchResult>();
 				}

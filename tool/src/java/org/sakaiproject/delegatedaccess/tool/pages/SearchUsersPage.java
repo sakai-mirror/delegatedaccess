@@ -238,7 +238,20 @@ public class SearchUsersPage extends BasePage {
 		private List<SearchResult> getData(){
 			if(list == null){
 				if(getSearch() != null && !"".equals(getSearch())){
-					list = projectLogic.searchUsers(getSearch(), 1, DelegatedAccessConstants.SEARCH_RESULTS_MAX);
+					list = projectLogic.searchUsers(getSearch());
+					if(!sakaiProxy.isSuperUser()){
+						//only allow super admins to modify their own permissions,
+						//otherwise, remove the current user's id
+						String userId = sakaiProxy.getCurrentUserId();
+						for (Iterator userItr = list.iterator(); userItr
+								.hasNext();) {
+							SearchResult user = (SearchResult) userItr.next();
+							if(userId.equals(user.getId())){
+								userItr.remove();
+								break;
+							}
+						}
+					}
 					sortList();
 				}else{
 					list = new ArrayList<SearchResult>();

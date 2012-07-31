@@ -115,14 +115,6 @@ public class UserPage  extends BaseTreePage{
 					if(nodeModel.getNode().title != null && nodeModel.getNode().title.startsWith("/site/")){
 						Site site = sakaiProxy.getSiteByRef(nodeModel.getNode().title);
 						if(site != null){
-							//first check that the user's has been initialized:
-							if(sakaiProxy.getCurrentSession().getAttribute(DelegatedAccessConstants.SESSION_ATTRIBUTE_DELEGATED_ACCESS_FLAG) == null){
-								//how did we get here?  (here = access to DA's site list, but the DA flag isn't set)
-								//two ideas:  1: Admin "Become User", which bypassess the Observer event login
-								//2: something screwed up on login (or logged in another way) and bypasses the Observer event login
-								//oh well, we want this to work, so let's retry:
-								projectLogic.initializeDelegatedAccessSession();
-							}
 							//redirect the user to the site
 							target.appendJavascript("window.open('" + site.getUrl() + "')");
 						}
@@ -173,7 +165,7 @@ public class UserPage  extends BaseTreePage{
 		Label noAccessLabel = new Label("noAccess"){
 			@Override
 			public boolean isVisible() {
-				return treeModel == null;
+				return treeModel == null && (!isShoppingPeriodTool() && !sakaiProxy.getDisableUserTreeView());
 			}
 		};
 		if(isShoppingPeriodTool()){
@@ -204,7 +196,7 @@ public class UserPage  extends BaseTreePage{
 			}
 			@Override
 			public boolean isVisible() {
-				return treeModel != null;
+				return treeModel != null || isShoppingPeriodTool() || (!isShoppingPeriodTool() && sakaiProxy.getDisableUserTreeView());
 			}
 		};
 		form.add(new TextField<String>("search", messageModel));
@@ -228,12 +220,20 @@ public class UserPage  extends BaseTreePage{
 	
 	private void setTreeModel(String userId, boolean cascade){
 		if(isShoppingPeriodTool()){
-			treeModel = projectLogic.getTreeModelForShoppingPeriod(false);
-			if(treeModel != null && ((DefaultMutableTreeNode) treeModel.getRoot()).getChildCount() == 0){
+			if(sakaiProxy.getDisableShoppingTreeView()){
 				treeModel = null;
+			}else{
+				treeModel = projectLogic.getTreeModelForShoppingPeriod(false);
+				if(treeModel != null && ((DefaultMutableTreeNode) treeModel.getRoot()).getChildCount() == 0){
+					treeModel = null;
+				}
 			}
 		}else{
-			treeModel = projectLogic.createAccessTreeModelForUser(userId, false, cascade);
+			if(sakaiProxy.getDisableUserTreeView()){
+				treeModel = null;
+			}else{
+				treeModel = projectLogic.createAccessTreeModelForUser(userId, false, cascade);
+			}
 		}
 	}
 }

@@ -1,5 +1,7 @@
 package org.sakaiproject.delegatedaccess.jobs;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -105,8 +107,10 @@ public class DelegatedAccessShoppingPeriodJob implements StatefulJob{
 				sakaiProxy.sendEmail("DelegatedAccessShoppingPeriodJob error", warning);
 			}
 		}catch (Exception e) {
-			log.error(e);
-			sakaiProxy.sendEmail("DelegatedAccessShoppingPeriodJob error", e.getMessage());
+			log.error(e.getMessage(), e);
+			StringWriter sw = new StringWriter();
+			e.printStackTrace(new PrintWriter(sw));
+			sakaiProxy.sendEmail("DelegatedAccessShoppingPeriodJob error", sw.toString());
 		}finally{
 			semaphore = false;
 		}
@@ -119,8 +123,10 @@ public class DelegatedAccessShoppingPeriodJob implements StatefulJob{
 				try{
 					shoppingPeriodRoleHelper(nodeModel);
 				}catch(Exception e){
-					log.error(e);
-					errors.put(nodeModel.getNode().title, e.getMessage());
+					log.error(e.getMessage(), e);
+					StringWriter sw = new StringWriter();
+					e.printStackTrace(new PrintWriter(sw));
+					errors.put(nodeModel.getNode().title, sw.toString());
 				}
 			}
 			for(int i = 0; i < node.getChildCount(); i++){

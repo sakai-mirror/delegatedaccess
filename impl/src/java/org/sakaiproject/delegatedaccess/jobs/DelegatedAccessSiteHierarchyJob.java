@@ -122,8 +122,11 @@ public class DelegatedAccessSiteHierarchyJob implements Job{
 				for(Site site : sites){
 					if(orderByModifiedDate){
 						//check the date to see if we can break out:
-						if(hierarchyJobLastRunDate.after(site.getModifiedDate())){
+						if(site.getModifiedDate() != null && hierarchyJobLastRunDate.after(site.getModifiedDate())){
 							hasMoreSites = false;
+							break;
+						}
+						if(site.getModifiedDate() == null && site.getCreatedDate() != null && hierarchyJobLastRunDate.after(site.getCreatedDate())){
 							break;
 						}
 					}
@@ -152,9 +155,9 @@ public class DelegatedAccessSiteHierarchyJob implements Job{
 							if(orderByModifiedDate){
 								//the job grabs all sites when orderBy is set, so this site was recently updated
 								//we need to make sure it wasn't removed from the hierarchy:
-								List<String> nodeIds = dao.getNodesBySiteRef(site.getReference(), DelegatedAccessConstants.HIERARCHY_ID);
-								if(nodeIds != null){
-									for(String nodeId : nodeIds){
+								Map<String, List<String>> nodeIds = dao.getNodesBySiteRef(new String[]{site.getReference()}, DelegatedAccessConstants.HIERARCHY_ID);
+								if(nodeIds != null && nodeIds.containsKey(site.getReference())){
+									for(String nodeId : nodeIds.get(site.getReference())){
 										projectLogic.removeNode(hierarchyService.getNodeById(nodeId));
 									}
 								}
@@ -162,7 +165,7 @@ public class DelegatedAccessSiteHierarchyJob implements Job{
 						}
 						processedSites++;
 					}catch (Exception e) {
-						log.error(e);
+						log.error(e.getMessage(), e);
 						if("".equals(errors)){
 							errors += "The following sites had errors: \n\n";
 						}
@@ -195,7 +198,7 @@ public class DelegatedAccessSiteHierarchyJob implements Job{
 
 			log.info("DelegatedAccessSiteHierarchyJob finished in " + (System.currentTimeMillis() - startTime) + " ms and processed " + processedSites + " sites.");		
 		}catch (Exception e) {
-			log.error(e);
+			log.error(e.getMessage(), e);
 			sakaiProxy.sendEmail("Error occurred in DelegatedAccessSiteHierarchyJob", e.getMessage());
 		}finally{
 			semaphore = false;
@@ -206,11 +209,11 @@ public class DelegatedAccessSiteHierarchyJob implements Job{
 		HierarchyNode node = null;
 		if(title != null && !"".equals(title)){
 
-			List<String> nodeIds = dao.getNodesBySiteRef(title, DelegatedAccessConstants.HIERARCHY_ID);
+			Map<String, List<String>> nodeIds = dao.getNodesBySiteRef(new String[]{title}, DelegatedAccessConstants.HIERARCHY_ID);
 			boolean hasChild = false;
 			String childNodeId = "";
-			if(nodeIds != null && nodeIds.size() > 0){
-				for(String id : nodeIds){
+			if(nodeIds != null && nodeIds.containsKey(title) && nodeIds.get(title).size() > 0){
+				for(String id : nodeIds.get(title)){
 					if(parentNode.directChildNodeIds.contains(id)){
 						hasChild = true;
 						childNodeId = id;
