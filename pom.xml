@@ -8,7 +8,7 @@
 	<artifactId>delegatedaccess</artifactId>
 	
 	<packaging>pom</packaging>
-	<version>1.1</version>
+	<version>1.2-SNAPSHOT</version>
 	
 	<parent>
 		<groupId>org.sakaiproject</groupId>
@@ -27,13 +27,13 @@
 			<dependency>
       			<groupId>org.sakaiproject.delegatedaccess</groupId>
       			<artifactId>delegatedaccess-api</artifactId>
-      			<version>1.1</version>
+      			<version>1.2-SNAPSHOT</version>
       			<scope>provided</scope>
     		</dependency>
     		<dependency>
       			<groupId>org.sakaiproject.delegatedaccess</groupId>
       			<artifactId>delegatedaccess-impl</artifactId>
-      			<version>1.1</version>
+      			<version>1.2-SNAPSHOT</version>
       			<scope>runtime</scope>
     		</dependency>
 			
@@ -118,9 +118,9 @@
 	</dependencyManagement>
 	
 <scm>
-  <connection>scm:svn:https://source.sakaiproject.org/contrib/delegatedaccess/tags/delegatedaccess-1.1</connection>
-  <developerConnection>scm:svn:https://source.sakaiproject.org/contrib/delegatedaccess/tags/delegatedaccess-1.1</developerConnection>
-  <url>https://source.sakaiproject.org/contrib/delegatedaccess/tags/delegatedaccess-1.1</url>
+  <connection>scm:svn:https://source.sakaiproject.org/contrib/delegatedaccess/branches/1.x</connection>
+  <developerConnection>scm:svn:https://source.sakaiproject.org/contrib/delegatedaccess/branches/1.x</developerConnection>
+  <url>https://source.sakaiproject.org/contrib/delegatedaccess/branches/1.x</url>
 </scm>	
 	<repositories>
 		<repository>
