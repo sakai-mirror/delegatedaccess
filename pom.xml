@@ -8,12 +8,12 @@
 	<artifactId>delegatedaccess</artifactId>
 	
 	<packaging>pom</packaging>
-	<version>3.1-SNAPSHOT</version>
+	<version>3.0</version>
 	
 	<parent>
 		<groupId>org.sakaiproject</groupId>
 		<artifactId>master</artifactId>
-		<version>2.10-SNAPSHOT</version>
+		<version>2.9.0</version>
 	</parent>
 	
 	<properties>
@@ -27,13 +27,13 @@
 			<dependency>
       			<groupId>org.sakaiproject.delegatedaccess</groupId>
       			<artifactId>delegatedaccess-api</artifactId>
-      			<version>3.1-SNAPSHOT</version>
+      			<version>3.0</version>
       			<scope>provided</scope>
     		</dependency>
     		<dependency>
       			<groupId>org.sakaiproject.delegatedaccess</groupId>
       			<artifactId>delegatedaccess-impl</artifactId>
-      			<version>3.1-SNAPSHOT</version>
+      			<version>3.0</version>
       			<scope>runtime</scope>
     		</dependency>
 			
@@ -122,9 +122,9 @@
 		</dependencies>
 	</dependencyManagement>
 <scm>
-  <connection>scm:svn:https://source.sakaiproject.org/contrib/delegatedaccess/branches/3.x</connection>
-  <developerConnection>scm:svn:https://source.sakaiproject.org/contrib/delegatedaccess/branches/3.x</developerConnection>
-  <url>https://source.sakaiproject.org/contrib/delegatedaccess/trunk</url>
+  <connection>scm:svn:https://source.sakaiproject.org/contrib/delegatedaccess/tags/delegatedaccess-3.0</connection>
+  <developerConnection>scm:svn:https://source.sakaiproject.org/contrib/delegatedaccess/tags/delegatedaccess-3.0</developerConnection>
+  <url>https://source.sakaiproject.org/contrib/delegatedaccess/tags/delegatedaccess-3.0</url>
 </scm>	
 	
 	<repositories>
